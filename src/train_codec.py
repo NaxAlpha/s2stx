@@ -11,6 +11,7 @@ Example:
 import argparse
 from pathlib import Path
 
+import soundfile as sf
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -60,10 +61,28 @@ def train_codec(
                 f"(rec={rec_loss.item():.4f}, vq={vq_loss.item():.4f})"
             )
 
-        if step % 200 == 0 or step == steps:
+        if step % 500 == 0 or step == steps:
             ckpt_path = output_dir / f"codec_step{step}.pt"
             torch.save({"cfg": cfg.__dict__, "state_dict": model.state_dict()}, ckpt_path)
             print(f"Saved checkpoint to {ckpt_path}")
+
+            # Save a few input/reconstruction waveform pairs for quick listening tests.
+            sample_dir = output_dir / f"samples_step{step}"
+            sample_dir.mkdir(parents=True, exist_ok=True)
+
+            with torch.no_grad():
+                # Use the current batch for samples.
+                num_samples = min(5, audio.shape[0])
+                audio_cpu = audio[:num_samples].detach().cpu()
+                recon_cpu = recon[:num_samples].detach().cpu()
+
+                for i in range(num_samples):
+                    in_path = sample_dir / f"input_{i}.wav"
+                    out_path = sample_dir / f"recon_{i}.wav"
+                    sf.write(str(in_path), audio_cpu[i].numpy(), cfg.sample_rate)
+                    sf.write(str(out_path), recon_cpu[i].numpy(), cfg.sample_rate)
+
+            print(f"Saved {num_samples} sample pairs to {sample_dir}")
 
 
 def parse_args() -> argparse.Namespace:
