@@ -104,7 +104,11 @@ def train_lm(
 
     opt = optim.AdamW(model.parameters(), lr=lr)
 
-    dataloader = create_librispeech_streaming_dataloader(batch_size=batch_size)
+    # Use longer audio segments for the LM (default 30s at 16 kHz).
+    dataloader = create_librispeech_streaming_dataloader(
+        batch_size=batch_size,
+        max_duration_s=30.0,
+    )
 
     model.train()
     for step in range(1, steps + 1):

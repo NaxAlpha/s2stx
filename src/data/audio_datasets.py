@@ -39,7 +39,7 @@ def create_librispeech_streaming_dataloader(
     split: str = "train.100",
     batch_size: int = 4,
     target_sr: int = 16_000,
-    max_duration_s: float = 4.0,
+    max_duration_s: float = 8.0,
 ) -> Iterator[AudioBatch]:
     """Create an infinite iterator over LibriSpeech audio using HF streaming.
 
@@ -47,7 +47,7 @@ def create_librispeech_streaming_dataloader(
         split: Which LibriSpeech split to use (e.g. 'train.100', 'train.clean.100').
         batch_size: Number of examples per batch.
         target_sr: Target sampling rate; LibriSpeech is 16 kHz by default.
-        max_duration_s: Truncate/clip audio to this many seconds.
+        max_duration_s: Truncate/clip audio to this many seconds (default 8s).
 
     Yields:
         AudioBatch with padded waveforms and lengths.
