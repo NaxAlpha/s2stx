@@ -191,12 +191,12 @@ def train_codec(
             )
 
         if step % 500 == 0 or step == steps:
-            ckpt_path = output_dir / f"codec_step{step}.pt"
+            ckpt_path = output_dir / f"codec_step_{step:06d}.pt"
             torch.save({"cfg": cfg.__dict__, "state_dict": model.state_dict()}, ckpt_path)
             print(f"Saved checkpoint to {ckpt_path}")
 
             # Save a few input/reconstruction waveform pairs for quick listening tests.
-            sample_dir = output_dir / f"samples_step{step}"
+            sample_dir = output_dir / f"samples_{step:06d}"
             sample_dir.mkdir(parents=True, exist_ok=True)
 
             with torch.no_grad():

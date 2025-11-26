@@ -134,7 +134,7 @@ def train_lm(
             print(f"Step {step}/{steps} - loss={loss.item():.4f}")
 
         if step % 200 == 0 or step == steps:
-            ckpt_path = output_dir / f"lm_step{step}.pt"
+            ckpt_path = output_dir / f"lm_step_{step:06d}.pt"
             torch.save({"cfg": lm_cfg.__dict__, "state_dict": model.state_dict()}, ckpt_path)
             print(f"Saved LM checkpoint to {ckpt_path}")
 
