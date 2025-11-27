@@ -67,7 +67,12 @@ def create_librispeech_streaming_dataloader(
                     np.arange(orig_len),
                     audio_arr,
                 ).astype(np.float32)
-            batch_arrays.append(audio_arr[:max_len])
+
+            # Randomly crop a segment of length max_len if the sample is longer.
+            if audio_arr.shape[0] > max_len:
+                start = np.random.randint(0, audio_arr.shape[0] - max_len + 1)
+                audio_arr = audio_arr[start : start + max_len]
+            batch_arrays.append(audio_arr)
 
         audio, lengths = _pad_batch(batch_arrays, max_len)
         yield AudioBatch(audio=audio, lengths=lengths)
@@ -80,22 +85,56 @@ def create_expressive_en_ja_streaming_dataloader(
 ) -> Iterator[AudioBatch]:
     """Create an infinite iterator over a mixture of expressive EN/JA datasets.
 
-    This uses HuggingFace datasets in streaming mode. The current mixture
-    includes:
-    - LibriSpeech (English audiobooks, baseline)
-    - litagin/moe-speech (Japanese character / voice-acting speech)
+    Uses HuggingFace datasets in streaming mode. The current mixture includes:
+    - openslr/librispeech_asr (English audiobooks)
+    - MLCommons/peoples_speech (large-scale English speech) [clean subset]
+    - LIUM/tedlium (TED talks)
+    - badayvedat/VCTK (multi-speaker English)
+    - keithito/lj_speech (single-speaker English TTS)
+    - japanese-asr/ja_asr.jsut_basic5000 (Japanese JSUT subset)
+    - shunyalabs/japanese-speech-dataset (Japanese speech)
     - joujiboi/japanese-anime-speech (Japanese anime / visual-novel style)
     """
 
     dataset_specs: List[Dict[str, Any]] = [
         {
-            "name": "librispeech_asr",
+            "name": "openslr/librispeech_asr",
             "config": "clean",
-            "split": "train.100",
+            "split": "train.clean.100",
             "audio_field": "audio",
         },
         {
-            "name": "litagin/moe-speech",
+            "name": "MLCommons/peoples_speech",
+            "config": "clean",
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "LIUM/tedlium",
+            "config": "release3",
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "badayvedat/VCTK",
+            "config": None,
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "keithito/lj_speech",
+            "config": None,
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "japanese-asr/ja_asr.jsut_basic5000",
+            "config": None,
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "shunyalabs/japanese-speech-dataset",
             "config": None,
             "split": "train",
             "audio_field": "audio",
@@ -160,7 +199,12 @@ def create_expressive_en_ja_streaming_dataloader(
                     audio_arr,
                 ).astype(np.float32)
 
-            batch_arrays.append(audio_arr[:max_len])
+            # Randomly crop a segment of length max_len if the sample is longer.
+            if audio_arr.shape[0] > max_len:
+                start = np.random.randint(0, audio_arr.shape[0] - max_len + 1)
+                audio_arr = audio_arr[start : start + max_len]
+
+            batch_arrays.append(audio_arr)
 
         audio, lengths = _pad_batch(batch_arrays, max_len)
         yield AudioBatch(audio=audio, lengths=lengths)
