@@ -26,7 +26,9 @@ import torch.optim as optim
 import torchaudio
 
 from .codec import StreamingRVQCodec, StreamingRVQCodecConfig
-from .data import create_librispeech_streaming_dataloader
+from .data import (
+    create_expressive_en_ja_streaming_dataloader,
+)
 
 
 def mse_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -143,7 +145,12 @@ def train_codec(
 
     opt = optim.AdamW(model.parameters(), lr=lr)
 
-    dataloader = create_librispeech_streaming_dataloader(batch_size=batch_size)
+    # Use a mixture of expressive EN/JA datasets instead of LibriSpeech only.
+    dataloader = create_expressive_en_ja_streaming_dataloader(
+        batch_size=batch_size,
+        target_sr=cfg.sample_rate,
+        max_duration_s=8.0,
+    )
 
     model.train()
     for step in range(1, steps + 1):

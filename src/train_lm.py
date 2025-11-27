@@ -18,7 +18,7 @@ import torch
 import torch.optim as optim
 
 from .codec import StreamingRVQCodec, StreamingRVQCodecConfig
-from .data import create_librispeech_streaming_dataloader
+from .data import create_expressive_en_ja_streaming_dataloader
 from .lm import AudioTokenTransformerConfig, AudioTokenTransformerLM
 
 
@@ -104,9 +104,11 @@ def train_lm(
 
     opt = optim.AdamW(model.parameters(), lr=lr)
 
-    # Use longer audio segments for the LM (default 30s at 16 kHz).
-    dataloader = create_librispeech_streaming_dataloader(
+    # Use longer audio segments from a mixture of expressive EN/JA datasets
+    # (default 30s at 16 kHz).
+    dataloader = create_expressive_en_ja_streaming_dataloader(
         batch_size=batch_size,
+        target_sr=codec_cfg.sample_rate,
         max_duration_s=30.0,
     )
 

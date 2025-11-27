@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Iterator, Optional, Tuple
+from typing import Iterator, Tuple, List, Dict, Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from datasets import load_dataset
+import random
 
 
 @dataclass
@@ -41,17 +41,7 @@ def create_librispeech_streaming_dataloader(
     target_sr: int = 16_000,
     max_duration_s: float = 8.0,
 ) -> Iterator[AudioBatch]:
-    """Create an infinite iterator over LibriSpeech audio using HF streaming.
-
-    Args:
-        split: Which LibriSpeech split to use (e.g. 'train.100', 'train.clean.100').
-        batch_size: Number of examples per batch.
-        target_sr: Target sampling rate; LibriSpeech is 16 kHz by default.
-        max_duration_s: Truncate/clip audio to this many seconds (default 8s).
-
-    Yields:
-        AudioBatch with padded waveforms and lengths.
-    """
+    """Create an infinite iterator over LibriSpeech audio using HF streaming."""
     ds = load_dataset("librispeech_asr", "clean", split=split, streaming=True)
 
     iterator = iter(ds)
@@ -83,4 +73,95 @@ def create_librispeech_streaming_dataloader(
         yield AudioBatch(audio=audio, lengths=lengths)
 
 
+def create_expressive_en_ja_streaming_dataloader(
+    batch_size: int = 4,
+    target_sr: int = 16_000,
+    max_duration_s: float = 8.0,
+) -> Iterator[AudioBatch]:
+    """Create an infinite iterator over a mixture of expressive EN/JA datasets.
+
+    This uses HuggingFace datasets in streaming mode. The current mixture
+    includes:
+    - LibriSpeech (English audiobooks, baseline)
+    - litagin/moe-speech (Japanese character / voice-acting speech)
+    - joujiboi/japanese-anime-speech (Japanese anime / visual-novel style)
+    """
+
+    dataset_specs: List[Dict[str, Any]] = [
+        {
+            "name": "librispeech_asr",
+            "config": "clean",
+            "split": "train.100",
+            "audio_field": "audio",
+        },
+        {
+            "name": "litagin/moe-speech",
+            "config": None,
+            "split": "train",
+            "audio_field": "audio",
+        },
+        {
+            "name": "joujiboi/japanese-anime-speech",
+            "config": None,
+            "split": "train",
+            "audio_field": "audio",
+        },
+    ]
+
+    streams: List[Dict[str, Any]] = []
+    for spec in dataset_specs:
+        ds = load_dataset(
+            spec["name"],
+            spec["config"],
+            split=spec["split"],
+            streaming=True,
+        )
+        streams.append(
+            {
+                "spec": spec,
+                "dataset": ds,
+                "iterator": iter(ds),
+            }
+        )
+
+    max_len = int(target_sr * max_duration_s)
+
+    while True:
+        batch_arrays = []
+        for _ in range(batch_size):
+            # Randomly choose a dataset stream
+            stream = random.choice(streams)
+            spec = stream["spec"]
+            it = stream["iterator"]
+
+            while True:
+                try:
+                    example = next(it)
+                except StopIteration:
+                    # Recreate iterator on exhaustion
+                    it = iter(stream["dataset"])
+                    stream["iterator"] = it
+                    example = next(it)
+
+                # For now we don't filter by language; all selected datasets
+                # are either English or Japanese speech.
+                break
+
+            audio_obj = example[spec["audio_field"]]
+            audio_arr = np.asarray(audio_obj["array"], dtype=np.float32)
+            sr = audio_obj["sampling_rate"]
+
+            if sr != target_sr:
+                orig_len = audio_arr.shape[0]
+                new_len = int(orig_len * target_sr / sr)
+                audio_arr = np.interp(
+                    np.linspace(0, orig_len, new_len, endpoint=False),
+                    np.arange(orig_len),
+                    audio_arr,
+                ).astype(np.float32)
+
+            batch_arrays.append(audio_arr[:max_len])
+
+        audio, lengths = _pad_batch(batch_arrays, max_len)
+        yield AudioBatch(audio=audio, lengths=lengths)
 
