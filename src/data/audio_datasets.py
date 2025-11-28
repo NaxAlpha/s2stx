@@ -99,37 +99,31 @@ def create_expressive_en_ja_streaming_dataloader(
             "name": "openslr/librispeech_asr",
             "config": "clean",
             "split": "train.100",
-            "audio_field": "audio",
         },
         {
             "name": "MLCommons/peoples_speech",
             "config": "clean",
             "split": "train",
-            "audio_field": "audio",
         },
         {
             "name": "badayvedat/VCTK",
             "config": None,
             "split": "train",
-            "audio_field": "audio",
         },
         {
             "name": "japanese-asr/ja_asr.jsut_basic5000",
             "config": None,
             "split": "train",
-            "audio_field": "audio",
         },
         {
             "name": "shunyalabs/japanese-speech-dataset",
             "config": None,
             "split": "train",
-            "audio_field": "audio",
         },
         {
             "name": "joujiboi/japanese-anime-speech",
             "config": None,
             "split": "train",
-            "audio_field": "audio",
         },
     ]
 
@@ -186,7 +180,16 @@ def create_expressive_en_ja_streaming_dataloader(
                 # are either English or Japanese speech.
                 break
 
-            audio_obj = example[spec["audio_field"]]
+            # Try the common 'audio' field first, then fall back to any
+            # value that looks like a decoded Audio feature
+            audio_obj = example.get("audio")
+            if audio_obj is None:
+                for v in example.values():
+                    if isinstance(v, dict) and "array" in v and "sampling_rate" in v:
+                        audio_obj = v
+                        break
+            if audio_obj is None:
+                raise KeyError(f"No audio-like field found in example from {spec['name']}")
             audio_arr = np.asarray(audio_obj["array"], dtype=np.float32)
             sr = audio_obj["sampling_rate"]
 
