@@ -100,7 +100,7 @@ def create_expressive_en_ja_streaming_dataloader(
         {
             "name": "openslr/librispeech_asr",
             "config": "clean",
-            "split": "train.clean.100",
+            "split": "train.100",
             "audio_field": "audio",
         },
         {
