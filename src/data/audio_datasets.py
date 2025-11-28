@@ -88,7 +88,6 @@ def create_expressive_en_ja_streaming_dataloader(
     Uses HuggingFace datasets in streaming mode. The current mixture includes:
     - openslr/librispeech_asr (English audiobooks)
     - MLCommons/peoples_speech (large-scale English speech) [clean subset]
-    - badayvedat/VCTK (multi-speaker English)
     - japanese-asr/ja_asr.jsut_basic5000 (Japanese JSUT subset)
     - shunyalabs/japanese-speech-dataset (Japanese speech)
     - joujiboi/japanese-anime-speech (Japanese anime / visual-novel style)
@@ -103,11 +102,6 @@ def create_expressive_en_ja_streaming_dataloader(
         {
             "name": "MLCommons/peoples_speech",
             "config": "clean",
-            "split": "train",
-        },
-        {
-            "name": "badayvedat/VCTK",
-            "config": None,
             "split": "train",
         },
         {
