@@ -89,7 +89,6 @@ def create_expressive_en_ja_streaming_dataloader(
     - openslr/librispeech_asr (English audiobooks)
     - MLCommons/peoples_speech (large-scale English speech) [clean subset]
     - badayvedat/VCTK (multi-speaker English)
-    - keithito/lj_speech (single-speaker English TTS)
     - japanese-asr/ja_asr.jsut_basic5000 (Japanese JSUT subset)
     - shunyalabs/japanese-speech-dataset (Japanese speech)
     - joujiboi/japanese-anime-speech (Japanese anime / visual-novel style)
@@ -110,12 +109,6 @@ def create_expressive_en_ja_streaming_dataloader(
         },
         {
             "name": "badayvedat/VCTK",
-            "config": None,
-            "split": "train",
-            "audio_field": "audio",
-        },
-        {
-            "name": "keithito/lj_speech",
             "config": None,
             "split": "train",
             "audio_field": "audio",
