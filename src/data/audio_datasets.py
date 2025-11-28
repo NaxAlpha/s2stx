@@ -88,7 +88,6 @@ def create_expressive_en_ja_streaming_dataloader(
     Uses HuggingFace datasets in streaming mode. The current mixture includes:
     - openslr/librispeech_asr (English audiobooks)
     - MLCommons/peoples_speech (large-scale English speech) [clean subset]
-    - LIUM/tedlium (TED talks)
     - badayvedat/VCTK (multi-speaker English)
     - keithito/lj_speech (single-speaker English TTS)
     - japanese-asr/ja_asr.jsut_basic5000 (Japanese JSUT subset)
@@ -106,12 +105,6 @@ def create_expressive_en_ja_streaming_dataloader(
         {
             "name": "MLCommons/peoples_speech",
             "config": "clean",
-            "split": "train",
-            "audio_field": "audio",
-        },
-        {
-            "name": "LIUM/tedlium",
-            "config": "release3",
             "split": "train",
             "audio_field": "audio",
         },
