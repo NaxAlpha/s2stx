@@ -68,6 +68,23 @@ def make_lm_batch(
     return input_ids, labels
 
 
+def _find_latest_lm_checkpoint(output_dir: Path) -> Path | None:
+    """Return the latest LM checkpoint in the output_dir, if any."""
+    ckpts = sorted(output_dir.glob("lm_step_*.pt"))
+    if not ckpts:
+        return None
+    return ckpts[-1]
+
+
+def _parse_step_from_lm_ckpt(path: Path) -> int:
+    """Extract global step from an LM checkpoint filename lm_step_XXXXXX.pt."""
+    stem = path.stem  # e.g. lm_step_000500
+    try:
+        return int(stem.split("_")[-1])
+    except ValueError:
+        return 0
+
+
 def train_lm(
     codec_ckpt: Path,
     output_dir: Path,
@@ -75,6 +92,7 @@ def train_lm(
     batch_size: int = 4,
     steps: int = 1000,
     lr: float = 1e-4,
+    new: bool = False,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -91,16 +109,35 @@ def train_lm(
 
     vocab_size = codec.codebook_size * codec.num_codebooks
 
-    lm_cfg = AudioTokenTransformerConfig(
-        vocab_size=vocab_size,
-        d_model=512,
-        n_heads=8,
-        n_layers=8,  # slightly smaller than the plan for Colab
-        d_ff=2048,
-        max_seq_len=1024,
-        dropout=0.1,
-    )
-    model = AudioTokenTransformerLM(lm_cfg).to(device)
+    # Auto-resume LM training; optionally clear checkpoints when starting fresh.
+    if new:
+        removed = 0
+        for ckpt in output_dir.glob("lm_step_*.pt"):
+            ckpt.unlink(missing_ok=True)
+            removed += 1
+        if removed:
+            print(f"--new specified, removed {removed} existing LM checkpoints in {output_dir}.")
+
+    latest_ckpt = _find_latest_lm_checkpoint(output_dir)
+    if latest_ckpt is not None:
+        lm_ckpt = torch.load(latest_ckpt, map_location=device)
+        lm_cfg = AudioTokenTransformerConfig(**lm_ckpt.get("cfg", {}))
+        model = AudioTokenTransformerLM(lm_cfg).to(device)
+        model.load_state_dict(lm_ckpt["state_dict"])
+        start_step = _parse_step_from_lm_ckpt(latest_ckpt)
+        print(f"Resuming LM training from {latest_ckpt} (global step {start_step}).")
+    else:
+        lm_cfg = AudioTokenTransformerConfig(
+            vocab_size=vocab_size,
+            d_model=512,
+            n_heads=8,
+            n_layers=8,  # slightly smaller than the plan for Colab
+            d_ff=2048,
+            max_seq_len=1024,
+            dropout=0.1,
+        )
+        model = AudioTokenTransformerLM(lm_cfg).to(device)
+        start_step = 0
 
     opt = optim.AdamW(model.parameters(), lr=lr)
 
@@ -112,8 +149,10 @@ def train_lm(
         max_duration_s=30.0,
     )
 
+    total_steps = start_step + steps
+
     model.train()
-    for step in range(1, steps + 1):
+    for step in range(start_step + 1, total_steps + 1):
         batch = next(dataloader)
         audio = batch.audio.to(device)
 
@@ -133,9 +172,9 @@ def train_lm(
         opt.step()
 
         if step % 50 == 0:
-            print(f"Step {step}/{steps} - loss={loss.item():.4f}")
+            print(f"Step {step}/{total_steps} - loss={loss.item():.4f}")
 
-        if step % 200 == 0 or step == steps:
+        if step % 200 == 0 or step == total_steps:
             ckpt_path = output_dir / f"lm_step_{step:06d}.pt"
             torch.save({"cfg": lm_cfg.__dict__, "state_dict": model.state_dict()}, ckpt_path)
             print(f"Saved LM checkpoint to {ckpt_path}")
@@ -154,6 +193,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument(
+        "--new",
+        action="store_true",
+        help="Start LM training from scratch, ignoring any existing checkpoints.",
+    )
     return parser.parse_args()
 
 
@@ -166,6 +210,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         steps=args.steps,
         lr=args.lr,
+        new=args.new,
     )
 
 

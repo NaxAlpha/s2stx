@@ -131,17 +131,55 @@ def codebook_diversity_loss(model: StreamingRVQCodec) -> torch.Tensor:
     return loss / len(model.rvq.codebooks)
 
 
+def _find_latest_codec_checkpoint(output_dir: Path) -> Path | None:
+    """Return the latest codec checkpoint in the output_dir, if any."""
+    ckpts = sorted(output_dir.glob("codec_step_*.pt"))
+    if not ckpts:
+        return None
+    return ckpts[-1]
+
+
+def _parse_step_from_codec_ckpt(path: Path) -> int:
+    """Extract global step from a codec checkpoint filename codec_step_XXXXXX.pt."""
+    stem = path.stem  # e.g. codec_step_000500
+    try:
+        return int(stem.split("_")[-1])
+    except ValueError:
+        return 0
+
+
 def train_codec(
     output_dir: Path,
     device: str = "cuda",
     batch_size: int = 8,
     steps: int = 1000,
     lr: float = 1e-4,
+    new: bool = False,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = StreamingRVQCodecConfig()
-    model = StreamingRVQCodec(cfg).to(device)
+    # Auto-resume: optionally clear checkpoints, then load latest if any.
+    if new:
+        # Remove existing codec checkpoints when starting fresh.
+        removed = 0
+        for ckpt in output_dir.glob("codec_step_*.pt"):
+            ckpt.unlink(missing_ok=True)
+            removed += 1
+        if removed:
+            print(f"--new specified, removed {removed} existing codec checkpoints in {output_dir}.")
+
+    latest_ckpt = _find_latest_codec_checkpoint(output_dir)
+    if latest_ckpt is not None:
+        ckpt = torch.load(latest_ckpt, map_location=device)
+        cfg = StreamingRVQCodecConfig(**ckpt.get("cfg", {}))
+        model = StreamingRVQCodec(cfg).to(device)
+        model.load_state_dict(ckpt["state_dict"])
+        start_step = _parse_step_from_codec_ckpt(latest_ckpt)
+        print(f"Resuming codec training from {latest_ckpt} (global step {start_step}).")
+    else:
+        cfg = StreamingRVQCodecConfig()
+        model = StreamingRVQCodec(cfg).to(device)
+        start_step = 0
 
     opt = optim.AdamW(model.parameters(), lr=lr)
 
@@ -152,8 +190,10 @@ def train_codec(
         max_duration_s=8.0,
     )
 
+    total_steps = start_step + steps
+
     model.train()
-    for step in range(1, steps + 1):
+    for step in range(start_step + 1, total_steps + 1):
         batch = next(dataloader)
         audio = batch.audio.to(device)
 
@@ -189,7 +229,7 @@ def train_codec(
 
         if step % 50 == 0:
             print(
-                f"Step {step}/{steps} - "
+                f"Step {step}/{total_steps} - "
                 f"loss={loss.item():.4f} "
                 f"(rec={rec_loss.item():.4f}, vq={vq_loss.item():.4f}, "
                 f"stft={stft_loss.item():.4f}, mel={mel_loss.item():.4f}, "
@@ -197,7 +237,7 @@ def train_codec(
                 f"var={var_loss.item():.4f}, cb_div={cb_div_loss.item():.4f})"
             )
 
-        if step % 500 == 0 or step == steps:
+        if step % 500 == 0 or step == total_steps:
             ckpt_path = output_dir / f"codec_step_{step:06d}.pt"
             torch.save({"cfg": cfg.__dict__, "state_dict": model.state_dict()}, ckpt_path)
             print(f"Saved checkpoint to {ckpt_path}")
@@ -228,6 +268,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument(
+        "--new",
+        action="store_true",
+        help="Start training from scratch, ignoring any existing checkpoints.",
+    )
     return parser.parse_args()
 
 
@@ -239,6 +284,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         steps=args.steps,
         lr=args.lr,
+        new=args.new,
     )
 
 
