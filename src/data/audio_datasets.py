@@ -135,12 +135,26 @@ def create_expressive_en_ja_streaming_dataloader(
 
     streams: List[Dict[str, Any]] = []
     for spec in dataset_specs:
-        ds = load_dataset(
-            spec["name"],
-            spec["config"],
-            split=spec["split"],
-            streaming=True,
-        )
+        # Try preferred split, fall back to 'test' if only a test split exists.
+        try:
+            ds = load_dataset(
+                spec["name"],
+                spec["config"],
+                split=spec["split"],
+                streaming=True,
+            )
+        except ValueError as e:
+            msg = str(e)
+            if "Bad split" in msg and "['test']" in msg:
+                # Retry using the test split.
+                ds = load_dataset(
+                    spec["name"],
+                    spec["config"],
+                    split="test",
+                    streaming=True,
+                )
+            else:
+                raise
         streams.append(
             {
                 "spec": spec,
